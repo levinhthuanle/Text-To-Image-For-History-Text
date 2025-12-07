@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Iterable, List
 
@@ -33,8 +34,15 @@ class DatasetPipeline:
             LOGGER.warning("No artifacts generated; nothing to process.")
             return records
 
+        derived_artifacts: List[ImageArtifact] = []
         for artifact in artifacts:
-            derived_artifacts = self.preprocessor.process(artifact)
+            derived_artifacts.extend(self.preprocessor.process(artifact))
+
+        if self.config.num_workers and self.config.num_workers > 1:
+            with ThreadPoolExecutor(max_workers=self.config.num_workers) as executor:
+                for record in executor.map(self._process_image, derived_artifacts):
+                    records.append(record)
+        else:
             for derived in derived_artifacts:
                 record = self._process_image(derived)
                 records.append(record)
@@ -45,6 +53,9 @@ class DatasetPipeline:
     def convert_pdfs(self) -> List[ImageArtifact]:
         self._ensure_output_dirs()
         pdf_files = sorted(self.config.raw_pdf_dir.glob(self.config.pdf_glob_pattern))
+
+        if self.config.max_pdfs is not None:
+            pdf_files = pdf_files[: self.config.max_pdfs]
 
         if not pdf_files:
             LOGGER.warning(
@@ -71,12 +82,15 @@ class DatasetPipeline:
             self.config.image_output_dir,
             dpi=self.config.dpi,
             overwrite=self.config.overwrite_images,
+            max_pages=self.config.max_pages_per_pdf,
         )
         artifacts: List[ImageArtifact] = []
         for idx, image_path in enumerate(image_paths, start=1):
             LOGGER.debug("Prepared image %s", image_path.name)
             artifacts.append(
-                ImageArtifact(image_path=image_path, parent_pdf=pdf_path, page_number=idx)
+                ImageArtifact(
+                    image_path=image_path, parent_pdf=pdf_path, page_number=idx
+                )
             )
         return artifacts
 
@@ -84,11 +98,12 @@ class DatasetPipeline:
         document = self.ocr_service.extract(artifact.image_path)
         caption = self.captioner.generate(artifact.image_path, document)
         qa_result = self.qa.evaluate(document, caption)
-        return DatasetRecord(artifact=artifact, ocr=document, caption=caption, qa=qa_result)
+        return DatasetRecord(
+            artifact=artifact, ocr=document, caption=caption, qa=qa_result
+        )
 
     def _write_annotations(self, records: Iterable[DatasetRecord]) -> None:
         output = self.config.annotation_output_path
         with output.open("w", encoding="utf-8") as handle:
             for record in records:
                 handle.write(json.dumps(record.to_dict(), ensure_ascii=False) + "\n")
-

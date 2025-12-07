@@ -10,15 +10,36 @@ from pipeline import DatasetPipeline, PipelineConfig
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Dataset generation pipeline")
-    parser.add_argument("--raw-dir", type=Path, help="Directory containing input PDF files")
-    parser.add_argument("--image-dir", type=Path, help="Directory to store generated page images")
-    parser.add_argument("--annotations", type=Path, help="Output JSONL annotations path")
-    parser.add_argument("--pattern", type=str, help="Glob pattern to match PDF filenames")
-    parser.add_argument("--dpi", type=int, help="Resolution for PDF to image conversion")
+    parser.add_argument(
+        "--raw-dir", type=Path, help="Directory containing input PDF files"
+    )
+    parser.add_argument(
+        "--image-dir", type=Path, help="Directory to store generated page images"
+    )
+    parser.add_argument(
+        "--annotations", type=Path, help="Output JSONL annotations path"
+    )
+    parser.add_argument(
+        "--pattern", type=str, help="Glob pattern to match PDF filenames"
+    )
+    parser.add_argument(
+        "--dpi", type=int, help="Resolution for PDF to image conversion"
+    )
+    parser.add_argument(
+        "--limit-pdfs", type=int, help="Process only the first N PDF files"
+    )
+    parser.add_argument(
+        "--limit-pages", type=int, help="Process only the first N pages per PDF"
+    )
     parser.add_argument(
         "--overwrite-images",
         action="store_true",
         help="Regenerate page images even if they already exist",
+    )
+    parser.add_argument(
+        "--num-workers",
+        type=int,
+        help="Number of parallel workers for OCR/caption steps",
     )
     parser.add_argument(
         "--convert-only",
@@ -40,6 +61,12 @@ def build_config(args: argparse.Namespace) -> PipelineConfig:
         config = replace(config, pdf_glob_pattern=args.pattern)
     if args.dpi:
         config = replace(config, dpi=args.dpi)
+    if args.limit_pdfs is not None:
+        config = replace(config, max_pdfs=args.limit_pdfs)
+    if args.limit_pages is not None:
+        config = replace(config, max_pages_per_pdf=args.limit_pages)
+    if args.num_workers is not None:
+        config = replace(config, num_workers=max(1, args.num_workers))
     if args.overwrite_images:
         config = replace(config, overwrite_images=True)
 

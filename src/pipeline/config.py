@@ -12,11 +12,14 @@ class PipelineConfig:
     pdf_glob_pattern: str = "*.pdf"
     image_output_dir: Path = Path("../dataset/image")
     annotation_output_path: Path = Path("../dataset/annotations.jsonl")
-    dpi: int = 300
+    dpi: int = 200
     min_ocr_confidence: float = 0.5
     split_height_ratio: float = 1.6
     split_overlap: int = 32
     overwrite_images: bool = False
+    max_pdfs: int | None = None
+    max_pages_per_pdf: int | None = None
+    num_workers: int = 1
 
     def resolve(self, anchor: Path) -> "PipelineConfig":
         """Return a new config with paths resolved against *anchor*."""
@@ -30,4 +33,7 @@ class PipelineConfig:
             split_height_ratio=self.split_height_ratio,
             split_overlap=self.split_overlap,
             overwrite_images=self.overwrite_images,
+            max_pdfs=self.max_pdfs,
+            max_pages_per_pdf=self.max_pages_per_pdf,
+            num_workers=self.num_workers,
         )
